@@ -8,3 +8,5 @@ $ gcc -o /tmp/break.out -lX11 -lm breakout.c && /tmp/break.out
 that's all
 
 have fun :D
+
+PS. Of course I update the comments...
