@@ -19,23 +19,25 @@ const double targetFrameTime = 1000.0 / targetFPS;
 double frameCount;
 
 typedef struct {
-  void* array;
-  int size;
-} Array;
+    /* 
+        these should be unsigned char 
+        this is because unsigned char is 
 
-Array createArray(size_t elementSize, int size) {
-  Array arr;
-  arr.array = malloc(elementSize * size);
-  arr.size = size;
-  return arr;
-}
+        0 - 255
+    */
+    
+    unsigned char red;
+    unsigned char green;
+    unsigned char blue;
 
-typedef struct {
-    int red;
-    int green;
-    int blue;
-    int alpha;
+    /*
+        pretty sure alpha is never really used
+        could've just replaced Color->Alpha with 255 each time
+    */
+    unsigned char alpha;
 } Color;
+
+#define createColor(r, g, b) (Color){r, g, b, 255}
 
 typedef struct {
   float x;
@@ -43,12 +45,17 @@ typedef struct {
 } PVector;
 
 typedef struct {
-  PVector position;
-  PVector velocity;
-  float width;
-  float height;
-  Color color;
-  bool isCircle;
+    PVector position;
+    PVector velocity;
+    float width;
+    float height;
+    Color color;
+    
+    /* 
+    since you only draw rects, you could just check if the width == the height instead 
+    having a bool floating around is a bit silly
+    */
+    bool isCircle; 
 } GameObject;
 
 //https://stackoverflow.com/questions/10192903/time-in-milliseconds-in-c
@@ -70,17 +77,23 @@ long long millis(void) {
     return (((long long)tv.tv_sec)*1000)+(tv.tv_usec/1000);
 }
 
+
 void GameObject_init(GameObject* gameObject, float x, float y, float w, float h, Color c) {
-  gameObject->position.x = x;
-  gameObject->position.y = y;
-  gameObject->velocity.x = 0;
-  gameObject->velocity.y = 0;
-  gameObject->width = w;
-  gameObject->height = h;
-  gameObject->color = c;
-  gameObject->isCircle = false;
+    gameObject->position.x = x;
+    gameObject->position.y = y;
+    gameObject->velocity.x = 0;
+    gameObject->velocity.y = 0;
+    gameObject->width = w;
+    gameObject->height = h;
+    gameObject->color = c;
+    gameObject->isCircle = false;
 }
 
+/* 
+not too sure why this is a function,
+
+it's so short just put it in the main loop
+*/
 void GameObject_update(GameObject* gameObject) {
   gameObject->position.x += gameObject->velocity.x;
   gameObject->position.y += gameObject->velocity.y;
@@ -102,14 +115,11 @@ return (gameObject->position.x < other->position.x + other->width &&
             gameObject->position.y + gameObject->height > other->position.y);
 }
 
-Color createColor(int red, int green, int blue) {
-    Color color;
-    color.red = red;
-    color.green = green;
-    color.blue = blue;
-    color.alpha = 255;
-    return color;
-}
+/* 
+    not sure why this is used rather than C's standard random generation
+
+    pretty sure this method would be really slow
+*/
 
 int linuxRandom(int from, int to) {
     // Otwarcie /dev/urandom w trybie odczytu
@@ -135,6 +145,12 @@ int linuxRandom(int from, int to) {
     return result;
 }
 
+/*
+    since this is only used once it really doesn't need to be a function
+
+    could also be a marco if you really wanted it like that
+*/
+
 float getDistance(float PositionAX, float PositionAY, float PositionBX, float PositionBY) {
     return sqrt(pow(PositionAX - PositionBX, 2) + pow(PositionAY - PositionBY, 2));
 }
@@ -145,7 +161,7 @@ void IDrawCircle(XImage* image, float PositionX, float PositionY, float SizeX, C
 
     for (int y = PositionY - SizeX; y < PositionY + SizeX; y++) {
         for (int x = PositionX - SizeX; x < PositionX + SizeX; x++) {
-            if (x>=0&&x<=width&&y>=0&&y<=height) {
+            if (x>=0 && x<=width & &y>=0 && y<=height) {
                 int i = (y * width + x) * 4;
                 if (getDistance(PositionX, PositionY, x, y) < SizeX) {
                     unsigned char* pixel = &image->data[i];
@@ -166,7 +182,7 @@ void IDrawRect(XImage* image, int startX, int startY, int rectWidth, int rectHei
 
     for (int y = startY; y < startY + rectHeight; y++) {
         for (int x = startX; x < startX + rectWidth; x++) {
-            if (x>=0&&x<=width&&y>=0&&y<=height) {
+            if (x >= 0 && x <= width && y >= 0 && y <= height) {
                 int i = (y * width + x) * 4;
                 unsigned char* pixel = &image->data[i];
                 pixel[0] = color.blue;     // składowa niebieska
@@ -178,10 +194,14 @@ void IDrawRect(XImage* image, int startX, int startY, int rectWidth, int rectHei
     }
 }
 
+/* 
+probably could ditch the function instead of relying 
+
+on this weird functional/oop style
+*/
 void GameObject_draw(XImage* image, GameObject* gameObject) {
     if (gameObject->isCircle) IDrawCircle(image, gameObject->position.x, gameObject->position.y, gameObject->width, gameObject->color);
         else IDrawRect(image, gameObject->position.x, gameObject->position.y, gameObject->width, gameObject->height, gameObject->color);
-
 }
 
 void background(XImage* image, Color color) {
@@ -235,26 +255,48 @@ int main() {
 
     //Tutaj pisz kod przed
 
-    Array gameObjects = createArray(sizeof(GameObject), 92);
+    /* 
+        you never even freed this array
+        this causes a memory leak 
+
+        and this method is pretty messy as it is 
+
+        might as well replace it with a static array (since it's loaded like one anyway)
+
+        probably would be a good idea to replace the array system as a whole tbh
+
+        at least it's not real OOP though 
+    */
+
+    const int gameObjects_size = 92;
+    GameObject gameObjects[92];
 
     //paddle
-
-    GameObject* paddle = (GameObject*)((char*)gameObjects.array + sizeof(GameObject) * 0);
+    
+    GameObject* paddle = (GameObject*)((char*)gameObjects + sizeof(GameObject) * 0);
     GameObject_init(paddle, width/2-30, height-10, 60, 10, createColor(22, 22, 22));
 
     //ball
-    GameObject* ball = (GameObject*)((char*)gameObjects.array + sizeof(GameObject) * 1);
+    GameObject* ball = (GameObject*)((char*)gameObjects + sizeof(GameObject) * 1);
     GameObject_init(ball, width/2, height/2, 9, 9, createColor(50, 50, 50));
     ball->isCircle=true;
 
     //blocks generator
 
     int objectCounter = 2;
-    int randomOffsetX=linuxRandom(0, 255);
-    int randomOffsetY=linuxRandom(0, 255);
+    
+    /* 
+        you could use your vector struct here if you really wanna be fancy 
+        or use an unsigned char array
+
+        using unsigned char here again because, 0 - 255
+    */
+    unsigned char randomOffsetX = linuxRandom(0, 255);
+    unsigned char randomOffsetY = linuxRandom(0, 255);
+    
     for (int x = 20; x < width-20; x+=40) {
         for (int y = 15; y < 215; y+=20) {
-            GameObject* block = (GameObject*)((char*)gameObjects.array + sizeof(GameObject) * objectCounter);
+            GameObject* block = (GameObject*)((char*)gameObjects + sizeof(GameObject) * objectCounter);
             objectCounter++;
             GameObject_init(block, x, y, 40, 20, createColor(x+randomOffsetX, y+randomOffsetY, y));
         }
@@ -262,8 +304,9 @@ int main() {
 
     long timeStart = millis();
 
-    bool leftKeyPressed = false;
-    bool rightKeyPressed = false;
+    /* which keys are pressed (left/right key) */
+    unsigned char keyPressed = 0;
+
     bool ballOnPaddle = true;
     XSelectInput(display, window, KeyPressMask | KeyReleaseMask);
 
@@ -280,10 +323,8 @@ int main() {
                 KeySym key = XLookupKeysym(&event.xkey, 0);
 
                 // Ustawienie odpowiedniej flagi w zależności od wciśniętego klawisza
-                if (key == XK_Left) {
-                    leftKeyPressed = true;
-                } else if (key == XK_Right) {
-                    rightKeyPressed = true;
+                if (key == XK_Left || key == XK_Right) {
+                    keyPressed = key % 255;
                 } else if (key == XK_space) {
                     if (ballOnPaddle) {
                         ballOnPaddle = false;
@@ -297,10 +338,8 @@ int main() {
                 KeySym key = XLookupKeysym(&event.xkey, 0);
 
                 // Wyzerowanie odpowiedniej flagi w zależności od zwolnionego klawisza
-                if (key == XK_Left) {
-                    leftKeyPressed = false;
-                } else if (key == XK_Right) {
-                    rightKeyPressed = false;
+                if (key % 255 == keyPressed) {
+                    keyPressed = 0;
                 }
             } else if (event.type == ClientMessage) {
                 // Obsługa zdarzenia ClientMessage (np. zamknięcie okna)
@@ -309,6 +348,7 @@ int main() {
                     // Zdarzenie zamknięcia okna
                     // Przerwanie pętli i zakończenie programu
                     // Zwolnienie pamięci bufora
+                    
                     free(image->data);
                     image->data = NULL;
                     XDestroyImage(image);
@@ -323,10 +363,10 @@ int main() {
         }
 
         //paddle movement
-        if (leftKeyPressed) {
+        if (keyPressed == XK_Left % 255) {
             paddle->velocity.x -=paddleSpeed;
             if (paddle->position.x < 0) paddle->position.x=0;
-        } else if (rightKeyPressed) {
+        } else if (keyPressed == XK_Right % 255) {
             paddle->velocity.x += paddleSpeed;
             if (paddle->position.x > width-paddle->width) paddle->position.x=width-paddle->width;
         }
@@ -334,19 +374,20 @@ int main() {
 
         //if ball is on paddle update ball position
         if (ballOnPaddle) {
-            ball->position.x = paddle->position.x+paddle->width/2;
-            ball->position.y = paddle->position.y-ball->width/2-paddle->height/2;
+            ball->position.x = paddle->position.x + paddle->width / 2;
+            ball->position.y = paddle->position.y - ball->width / 2 - paddle->height / 2;
         }
 
         //ball-paddle collision
-        if (GameObject_checkCollision(ball, paddle)&&ball->velocity.y > 0) {
+        
+        if (GameObject_checkCollision(ball, paddle) && ball->velocity.y > 0) {
             ball->velocity.y*=-1;
             ball->velocity.x+=paddle->velocity.x*0.2;
         }
 
         background(image, createColor(200, 200, 200));
-        for (int i = 0; i < gameObjects.size; i++) {
-            GameObject* gameObject = (GameObject*)((char*)gameObjects.array + sizeof(GameObject) * i);
+        for (int i = 0; i < gameObjects_size; i++) {
+            GameObject* gameObject = (GameObject*)((char*)gameObjects + sizeof(GameObject) * i);
             if (!(gameObject->width == 0||gameObject->height == 0)) {
                 GameObject_update(gameObject);
                 GameObject_draw(image, gameObject);
@@ -361,12 +402,17 @@ int main() {
             ballOnPaddle = true;
             ball->velocity.x = 0;
 
-            int objectCounter = 2;
-            int randomOffsetX=linuxRandom(0, 255);
-            int randomOffsetY=linuxRandom(0, 255);
+            /* 
+                no need to redefine any of these
+            */
+            objectCounter = 2;
+            
+            randomOffsetX=linuxRandom(0, 255);
+            randomOffsetY=linuxRandom(0, 255);
+            
             for (int x = 20; x < width-20; x+=40) {
                 for (int y = 15; y < 215; y+=20) {
-                    GameObject* block = (GameObject*)((char*)gameObjects.array + sizeof(GameObject) * objectCounter);
+                    GameObject* block = (GameObject*)((char*)gameObjects + sizeof(GameObject) * objectCounter);
                     objectCounter++;
                     GameObject_init(block, x, y, 40, 20, createColor(x+randomOffsetX, y+randomOffsetY, y));
                 }
@@ -376,7 +422,7 @@ int main() {
         //ball-blocks collision
         bool ballNeedBounce = false;
         for (int i = 2; i < objectCounter; i++) {
-            GameObject* block = (GameObject*)((char*)gameObjects.array + sizeof(GameObject) * i);
+            GameObject* block = (GameObject*)((char*)gameObjects + sizeof(GameObject) * i);
             if (GameObject_checkCollision(ball, block)) {
                 block->width=0;
                 block->height=0;
